@@ -7,7 +7,7 @@ import { Types } from "mongoose";
 
 export const getAllContacts = async (req, res) => {
   try {
-    const contacts = await Contact.find();
+    const contacts = await Contact.find({owner: req.user.id});
     res.status(200).json(contacts);
   } catch (error) {
     console.error("Error getting all contacts:", error);
@@ -15,7 +15,7 @@ export const getAllContacts = async (req, res) => {
   }
 };
 
-export const getOneContact = async (req, res) => {
+export const getOneContact = async (req, res, next) => {
   const { id } = req.params;
 
   if (!Types.ObjectId.isValid(id)) {
@@ -25,31 +25,39 @@ export const getOneContact = async (req, res) => {
   try {
     const contact = await Contact.findById(id);
 
-    if (contact) {
-      res.status(200).json(contact);
-    } else {
-      res.status(404).json({ message: "Not found" });
+    if (!contact) {
+      return res.status(404).json({ message: "Contact not found" });
     }
+
+    if (contact.owner.toString() !== req.user.id) {
+      return res.status(404).send({ message: "Contact not found" });
+    }
+
+    res.status(200).json(contact);
   } catch (error) {
     console.error("Error fetching contact by id:", error);
 
-    res.status(500).json({ message: "Internal server error" });
+    next(error);
   }
 };
 
-export const deleteContact = async (req, res) => {
+export const deleteContact = async (req, res, next) => {
   try {
     const { id } = req.params;
     const contact = await Contact.findByIdAndDelete(id);
 
-    if (contact) {
-      res.status(200).json({ contact });
-    } else {
-      res.status(404).json({ message: "Not found" });
+    if (!contact) {
+      return res.status(404).json({ message: "Contact not found" });
     }
+
+    if (contact.owner.toString() !== req.user.id) {
+      return res.status(404).send({ message: "Contact not found" });
+    }
+
+    res.status(200).json(contact);
   } catch (error) {
     console.log(("Error delete contact by id:", error));
-    res.status(500).json({ message: "Internal server error" });
+    next(error);
   }
 };
 
@@ -59,6 +67,7 @@ export const createContact = async (req, res) => {
     email: req.body.email,
     phone: req.body.phone,
     favorite: req.body.favorite,
+    owner: req.user.id,
   };
 
   try {
@@ -82,46 +91,45 @@ export const createContact = async (req, res) => {
   }
 };
 
-export const updateContact = async (req, res) => {
+export const updateContact = async (req, res, next) => {
   const { id } = req.params;
 
-  const contact = {
-    name: req.body.name,
-    email: req.body.email,
-    phone: req.body.phone,
-    favorite: req.body.favorite,
-  };
+  if (!Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ message: "Invalid _id" });
+  }
+
+  const { name, email, phone, favorite } = req.body;
+
+  if (!name && !email && !phone && favorite === undefined) {
+    return res.status(400).json("Body must have at least one field");
+  }
+
+  const { error } = updateContactSchema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ message: error.message });
+  }
 
   try {
-    const { name, email, phone, favorite } = req.body;
-
-    if (!name & !email & !phone & !favorite) {
-      res.status(400).json("Body must have at least one field");
-    }
-
-    const { error } = updateContactSchema.validate(req.body);
-    if (error) {
-      res.status(400, error.message);
-    }
-
-    const updatedContact = await Contact.findByIdAndUpdate(id, contact, {
+    const updatedContact = await Contact.findByIdAndUpdate(id, req.body, {
       new: true,
     });
 
     if (!updatedContact) {
-        res.status(404).json({ message: "Contact not found" });
+      return res.status(404).json({ message: "Contact not found" });
+    }
+
+    if (updatedContact.owner.toString() !== req.user.id) {
+      return res.status(404).send({ message: "Contact not found" });
     }
 
     res.status(200).json(updatedContact);
   } catch (error) {
     console.error("Error updating contact:", error);
-    res
-      .status(error.status || 500)
-      .json({ message: error.message || "Internal server error" });
+    next(error);
   }
 };
 
-export const updateStatusContact = async (req, res) => {
+export const updateStatusContact = async (req, res, next) => {
   const { contactId } = req.params;
   const { favorite } = req.body;
 
@@ -135,15 +143,17 @@ export const updateStatusContact = async (req, res) => {
       { new: true }
     );
 
-    if (updatedContact) {
-      res.status(200).json(updatedContact);
-    } else {
-      res.status(404).json({ message: "Not found" });
+    if (!updatedContact) {
+      return res.status(404).json({ message: "Contact not found" });
     }
+
+    if (updatedContact.owner.toString() !== req.user.id) {
+      return res.status(404).send({ message: "Contact not found" });
+    }
+
+    res.status(200).json(updatedContact);
   } catch (error) {
     console.error("Error updating contact status:", error);
-    res
-      .status(error.status || 500)
-      .json({ message: error.message || "Internal server error" });
+    next(error);
   }
 };
