@@ -23,7 +23,7 @@ export const getOneContact = async (req, res, next) => {
   }
 
   try {
-    const contact = await Contact.findById(id);
+    const contact = await Contact.findOne({ _id: id, owner: req.user.id });
 
     if (!contact) {
       return res.status(404).json({ message: "Contact not found" });
@@ -44,7 +44,7 @@ export const getOneContact = async (req, res, next) => {
 export const deleteContact = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const contact = await Contact.findByIdAndDelete(id);
+    const contact = await Contact.findOneAndDelete({ _id: id, owner: req.user.id });
 
     if (!contact) {
       return res.status(404).json({ message: "Contact not found" });
@@ -110,9 +110,11 @@ export const updateContact = async (req, res, next) => {
   }
 
   try {
-    const updatedContact = await Contact.findByIdAndUpdate(id, req.body, {
-      new: true,
-    });
+    const updatedContact = await Contact.findOneAndUpdate(
+      { _id: id, owner: req.user.id },
+      req.body,
+      { new: true }
+    );
 
     if (!updatedContact) {
       return res.status(404).json({ message: "Contact not found" });
@@ -134,12 +136,12 @@ export const updateStatusContact = async (req, res, next) => {
   const { favorite } = req.body;
 
   try {
-    if (!favorite) {
+    if (favorite === undefined) {
       return res.status(400).json({ message: "Field favorite is required" });
     }
-    const updatedContact = await Contact.findByIdAndUpdate(
-      contactId,
-      { favorite: favorite },
+    const updatedContact = await Contact.findOneAndUpdate(
+      { _id: contactId, owner: req.user.id },
+      { favorite },
       { new: true }
     );
 
