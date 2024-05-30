@@ -2,6 +2,10 @@ import User from "../models/user.js";
 import { createUserSchema } from "../schemas/userSchemas.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import gravatar from "gravatar";
+import * as fs from "node:fs/promises";
+import path from "node:path";
+import Jimp from "jimp";
 
 async function register(req, res, next) {
   const { error } = createUserSchema.validate(req.body);
@@ -23,16 +27,20 @@ async function register(req, res, next) {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
+    const avatarURL = gravatar.url(email, { s: "200", r: "pg", d: "mm" });
+
     const newUser = await User.create({
       password: passwordHash,
       email: email.toLowerCase(),
       subscription,
+      avatarURL,
     });
 
     res.status(201).send({
       user: {
         email: newUser.email,
         subscription: newUser.subscription,
+        avatarURL: newUser.avatarURL,
       },
     });
   } catch (error) {
@@ -103,4 +111,31 @@ async function current(req, res, next) {
   }
 }
 
-export default { register, login, logout, current };
+async function uploadAvatar(req, res, next) {
+  try {
+    const uploadedFilePath = path.resolve("public/avatars", req.file.filename);
+
+    await fs.rename(req.file.path, uploadedFilePath);
+
+    const image = await Jimp.read(uploadedFilePath);
+
+    image.resize(250, 250);
+
+    await image.writeAsync(uploadedFilePath);
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { avatarURL: req.file.filename },
+      { new: true }
+    );
+
+    if (user === null) {
+      return res.status(401).send({ message: "Not authorized" });
+    }
+    res.status(200).send({ avatarURL: user.avatarURL });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export default { register, login, logout, current, uploadAvatar };
