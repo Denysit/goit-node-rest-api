@@ -6,6 +6,8 @@ import gravatar from "gravatar";
 import * as fs from "node:fs/promises";
 import path from "node:path";
 import Jimp from "jimp";
+import mail from "../mail.js";
+import crypto from "node:crypto";
 
 async function register(req, res, next) {
   const { error } = createUserSchema.validate(req.body);
@@ -27,6 +29,8 @@ async function register(req, res, next) {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
+    const verificationToken = crypto.randomUUID();
+
     const avatarURL = gravatar.url(email, { s: "200", r: "pg", d: "mm" });
 
     const newUser = await User.create({
@@ -34,6 +38,15 @@ async function register(req, res, next) {
       email: email.toLowerCase(),
       subscription,
       avatarURL,
+      verificationToken,
+    });
+
+    mail.sendMail({
+      to: emailInLowerCase,
+      from: "mister.gimnast@gmail.com",
+      subject: `Welcom ${emailInLowerCase}`,
+      html: `To confirm your email click on the <a href="http://localhost:3000/api/users/verify/${verificationToken}">Link</a>`,
+      text: `To confirm your email open the link http://localhost:3000/api/users/verify/${verificationToken}`,
     });
 
     res.status(201).send({
@@ -65,6 +78,11 @@ async function login(req, res, next) {
     if (isMatch === false) {
       return res.status(401).send({ message: "Email or password is wrong" });
     }
+
+    if (user.verify === false) {
+      return res.status(401).send({ message: "Please verify your email" });
+    }
+
     const token = jwt.sign(
       { id: user.id, email: user.email },
       process.env.JWT_SECRET,
@@ -138,4 +156,26 @@ async function uploadAvatar(req, res, next) {
   }
 }
 
-export default { register, login, logout, current, uploadAvatar };
+async function verify(req, res, next) {
+  const { verificationToken } = req.params;
+
+  try {
+
+    const user = await User.findOne({ verificationToken });
+
+    if (user === null) {
+      res.status(404).send({ message: "User not found" });
+    }
+
+    await User.findByIdAndUpdate(user.id, {
+      verify: true,
+      verificationToken: null,
+    });
+
+    res.status(200).send({ message: "Verification successful" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export default { register, login, logout, current, uploadAvatar, verify };
