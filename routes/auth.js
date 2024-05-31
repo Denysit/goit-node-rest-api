@@ -4,6 +4,7 @@ import validateBody from "../helpers/validateBody.js";
 import { createUserSchema } from "../schemas/userSchemas.js";
 import authMiddleware from "../middleware/auth.js";
 import uploadMiddleware from "../middleware/upload.js";
+import {resendVerificationEmailSchema} from "../schemas/userSchemas.js"; 
 
 
 const userRouter = express.Router();
@@ -14,6 +15,7 @@ userRouter.get("/logout", authMiddleware, AuthController.logout);
 userRouter.get("/current", authMiddleware, AuthController.current);
 userRouter.patch("/avatars", authMiddleware, uploadMiddleware.single("avatar"), AuthController.uploadAvatar);
 userRouter.get("/verify/:verificationToken", AuthController.verify);
+userRouter.post("/verify", validateBody(resendVerificationEmailSchema), AuthController.resendVerificationEmail)
 
 
 
