@@ -10,5 +10,12 @@ export const createUserSchema = Joi.object({
     }),
 });
 
+export const resendVerificationEmailSchema  = Joi.object({
+    email: Joi.string().email().required().trim().messages({
+        'any.required': 'Email is required',
+        'string.email': 'Email must be a valid email address',
+    }),
+})
+
 
 
